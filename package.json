@@ -1,9 +1,8 @@
 {
-  "name": "downloader",
+  "name": "@tybys/downloader",
   "version": "0.0.1",
   "description": "",
   "typings": "./lib/cjs-modern/index.d.ts",
-  "module": "./lib/esm/index.js",
   "main": "./lib/cjs-modern/index.js",
   "scripts": {
     "prepare": "npm run build",
@@ -18,7 +17,7 @@
     "fix": "tsgo fix"
   },
   "keywords": [],
-  "author": "Administrator",
+  "author": "toyobayashi",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
