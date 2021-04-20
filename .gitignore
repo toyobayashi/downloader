@@ -8,3 +8,6 @@ package-lock.json
 /test/out
 
 /docs
+
+/test/**/*
+!/test/index.js
