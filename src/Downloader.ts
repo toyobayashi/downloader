@@ -25,7 +25,7 @@ export interface IDownloadOptions {
 /** @public */
 export interface IDownloaderOptions extends Omit<IDownloadOptions, 'out'> {
   maxConcurrentDownloads: number
-  // progressInterval: number
+  progressInterval: number
 }
 
 /** @public */
@@ -49,8 +49,8 @@ export class Downloader extends EventEmitter {
     dir: join(homedir(), 'Download'),
     maxConcurrentDownloads: 1,
     headers: {},
-    agent: false
-    // progressInterval: 500
+    agent: false,
+    progressInterval: 100
   }
 
   private _lock: boolean = false
@@ -271,7 +271,7 @@ export class Downloader extends EventEmitter {
     let start = 0
     let contentLength = 0
 
-    let targetStream: WriteStream
+    let targetStream: WriteStream | undefined
 
     const downloadStream = got.stream(download.url, {
       method: 'GET',
@@ -279,19 +279,29 @@ export class Downloader extends EventEmitter {
       timeout: {
         response: 10000
       },
+      // throwHttpErrors: false,
       agent: download.agent,
       encoding: 'binary'
     })
 
     downloadStream.on('error', (err: RequestError) => {
+      rename = false
+      download.req?.abort()
+      download.req = null
+      targetStream?.close()
       if (err instanceof got.TimeoutError) {
         this._error(download, DownloadErrorCode.TIMEOUT)
+      } else if (err instanceof got.HTTPError) {
+        if (err.response.statusCode === 403) {
+          this._error(download, DownloadErrorCode.AUTH_FAILED)
+        } else if (err.response.statusCode === 404) {
+          this._error(download, DownloadErrorCode.RES_NOT_FOUND)
+        } else {
+          this._error(download, DownloadErrorCode.NETWORK, err.message)
+        }
       } else {
-        this._error(download, DownloadErrorCode.CUSTOM, err.message)
+        this._error(download, DownloadErrorCode.NETWORK, err.message)
       }
-      rename = false
-      download.req = null
-      targetStream.close()
     })
 
     downloadStream.on('request', (request: ClientRequest) => {
@@ -305,24 +315,13 @@ export class Downloader extends EventEmitter {
     })
 
     downloadStream.on('response', (res: Response<any>) => {
-      if (res.statusCode === 403) {
-        this._error(download, DownloadErrorCode.AUTH_FAILED)
-        download.req?.abort()
-        rename = false
-        return
-      }
-      if (res.statusCode === 404) {
-        this._error(download, DownloadErrorCode.RES_NOT_FOUND)
-        download.req?.abort()
-        rename = false
-        return
-      }
       contentLength = Number(res.headers['content-length']) || 0
       download.totalLength = contentLength + fileLength
       start = Date.now()
 
       try {
         targetStream = createWriteStream(p + '.tmp', { flags: 'a+' }).on('close', () => {
+          download.req = null
           const tmpFileSize = statSync(p + '.tmp').size
           if (tmpFileSize === 0) {
             try {
@@ -356,41 +355,26 @@ export class Downloader extends EventEmitter {
     })
 
     downloadStream.on('downloadProgress', (progress: Progress) => {
+      if (targetStream == null) return
       const now = Date.now()
-      const current = progress.transferred + fileLength
-      download.downloadSpeed = Math.floor((current - download.completedLength) / ((now - start) / 1000))
-      start = now
-      download.completedLength = current
-      if (this.listenerCount('progress') > 0) {
-        this.emit('progress', {
-          gid: download.gid,
-          totalLength: download.totalLength,
-          completedLength: download.completedLength,
-          downloadSpeed: download.downloadSpeed,
-          path: download.path,
-          url: download.url,
-          percent: 100 * (download.completedLength) / (download.totalLength)
-        })
+      const interval = now - start
+      if (interval > this.settings.progressInterval || download.downloadSpeed === 0 || (progress.transferred === (progress.total ?? contentLength))) {
+        const current = progress.transferred + fileLength
+        download.downloadSpeed = Math.floor((current - download.completedLength) / (interval / 1000))
+        start = now
+        download.completedLength = current
+        if (this.listenerCount('progress') > 0) {
+          this.emit('progress', {
+            gid: download.gid,
+            totalLength: download.totalLength,
+            completedLength: download.completedLength,
+            downloadSpeed: download.downloadSpeed,
+            path: download.path,
+            url: download.url,
+            percent: download.totalLength === 0 ? 0 : (100 * (download.completedLength) / (download.totalLength))
+          })
+        }
       }
-      // if (progress.transferred === (progress.total ?? contentLength)) {
-      //   this.emit('progress', {
-      //     path: download.path,
-      //     current: fileLength + (progress.transferred),
-      //     max: fileLength + ((progress.total ?? contentLength)),
-      //     loading: 100 * (fileLength + (progress.transferred)) / (fileLength + ((progress.total ?? contentLength)))
-      //   })
-      // } else {
-      //   const now = Date.now()
-      //   if (now - start > this.settings.progressInterval) {
-      //     start = now
-      //     this.emit('progress', {
-      //       path: download.path,
-      //       current: fileLength + (progress.transferred),
-      //       max: fileLength + ((progress.total ?? contentLength)),
-      //       loading: 100 * (fileLength + (progress.transferred)) / (fileLength + ((progress.total ?? contentLength)))
-      //     })
-      //   }
-      // }
     })
 
     // downloadStream.pipe(targetStream)

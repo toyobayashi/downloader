@@ -4,6 +4,7 @@ export enum DownloadErrorCode {
   UNKNOWN = 1,
   TIMEOUT = 2,
   RES_NOT_FOUND = 3,
+  NETWORK = 6,
   FILE_EXISTS = 13,
   RENAME_FAILED = 14,
   CREATE_FILE_FAILED = 16,
@@ -20,6 +21,7 @@ export function getErrorMessage (code: DownloadErrorCode): string {
     case DownloadErrorCode.UNKNOWN: return 'Unknown error occurred'
     case DownloadErrorCode.TIMEOUT: return 'Timeout occurred'
     case DownloadErrorCode.RES_NOT_FOUND: return 'Resource was not found'
+    case DownloadErrorCode.NETWORK: return 'Network problem occurred'
     case DownloadErrorCode.FILE_EXISTS: return 'File already existed'
     case DownloadErrorCode.RENAME_FAILED: return 'Renaming file failed'
     case DownloadErrorCode.CREATE_FILE_FAILED: return 'Can not create new file'
