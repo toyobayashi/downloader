@@ -41,6 +41,10 @@ export interface IDownloadProgress {
 
 /** @public */
 export class Downloader extends EventEmitter {
+  public static getVersion (): string {
+    return __VERSION__
+  }
+
   public settings: IDownloaderOptions = {
     dir: join(homedir(), 'Download'),
     maxConcurrentDownloads: 1,
@@ -61,10 +65,9 @@ export class Downloader extends EventEmitter {
   public constructor () {
     super()
     this._downloadList.on('remove', () => {
-      if (!this._lock) {
+      if (!this._lock && this._downloadList.size < this.settings.maxConcurrentDownloads) {
         const nextDownload = this._waitingQueue.shift()
         if (nextDownload) {
-          this._downloadList.push(nextDownload)
           this._download(nextDownload)
         }
       }
@@ -101,17 +104,18 @@ export class Downloader extends EventEmitter {
       download.status = DownloadStatus.WAITING
       this._waitingQueue.push(download)
     } else {
-      this._downloadList.push(download)
       this._download(download)
     }
     return download.gid
   }
 
-  public pause (gid: string): void {
+  public pause (gid: string): boolean {
     const download: Download | undefined = this._downloads.get(gid)
     if (download) {
       this._pause(download)
+      return true
     }
+    return false
   }
 
   private _pause (download: Download): void {
@@ -122,16 +126,57 @@ export class Downloader extends EventEmitter {
 
   public pauseAll (): void {
     this._lock = true
-    for (const download of this._waitingQueue) {
+    for (const download of this._waitingQueue.toArray()) {
       this._pause(download)
     }
-    for (const download of this._downloadList) {
+    for (const download of this._downloadList.toArray()) {
       this._pause(download)
     }
     this._lock = false
   }
 
-  public remove (gid: string, removeFile?: boolean): void {
+  public unpause (gid: string): boolean {
+    const download: Download | undefined = this._downloads.get(gid)
+    if (download && (download.status === DownloadStatus.PAUSED)) {
+      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
+      if (needWait) {
+        download.status = DownloadStatus.WAITING
+        this._waitingQueue.push(download)
+      } else {
+        this._download(download)
+      }
+      return true
+    }
+    return false
+  }
+
+  public unpauseAll (): void {
+    this._lock = true
+    for (const download of this._pausedList.toArray()) {
+      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
+      if (needWait) {
+        download.status = DownloadStatus.WAITING
+        this._waitingQueue.push(download)
+      } else {
+        this._download(download)
+      }
+    }
+    this._lock = false
+  }
+
+  public tellActive (): Array<Readonly<IDownload>> {
+    return this._downloadList.toArray()
+  }
+
+  public tellWaiting (): Array<Readonly<IDownload>> {
+    return this._waitingQueue.toArray()
+  }
+
+  public tellStopped (): Array<Readonly<IDownload>> {
+    return [...this._completedList.toArray(), ...this._errorList.toArray()]
+  }
+
+  public remove (gid: string, removeFile?: boolean): boolean {
     const download: Download | undefined = this._downloads.get(gid)
     if (download) {
       download.req?.abort()
@@ -149,7 +194,9 @@ export class Downloader extends EventEmitter {
         } catch (_) {}
       }
       this._downloads.delete(gid)
+      return true
     }
+    return false
   }
 
   public removeAll (removeFile?: boolean): void {
@@ -196,6 +243,7 @@ export class Downloader extends EventEmitter {
 
   private _download (download: Download): void {
     download.status = DownloadStatus.ACTIVE
+    this._downloadList.push(download)
     const p = download.path
     try {
       mkdirSync(dirname(p), { recursive: true })
