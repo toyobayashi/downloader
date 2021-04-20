@@ -70,6 +70,14 @@ export class DownloadList extends LinkedList<Download> {
     this._event.emit('clear')
   }
 
+  public toArray (): Download[] {
+    const arr: Download[] = []
+    for (const download of this) {
+      arr.push(download)
+    }
+    return arr
+  }
+
   public on (event: 'push', listener: (element: Readonly<IDownload>) => void): this
   public on (event: 'unshift', listener: (element: Readonly<IDownload>) => void): this
   public on (event: 'pop', listener: (element: Readonly<IDownload>) => void): this
