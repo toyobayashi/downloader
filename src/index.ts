@@ -4,5 +4,17 @@
  * @packageDocumentation
  */
 
-export { IFile, DownloadStatus, IDownload } from './Download'
-export * from './Downloader'
+export { DownloadErrorCode, getErrorMessage, DownloadError } from './DownloadError'
+
+export type { IDownload } from './Download'
+export { DownloadStatus } from './Download'
+
+export type {
+  IDownloadOptions,
+  IDownloaderOptions,
+  IDownloadProgress
+} from './Downloader'
+
+export {
+  Downloader
+} from './Downloader'
