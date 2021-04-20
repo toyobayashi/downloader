@@ -299,6 +299,8 @@ export class Downloader extends EventEmitter {
         } else {
           this._error(download, DownloadErrorCode.NETWORK, err.message)
         }
+      } else if (err instanceof got.MaxRedirectsError) {
+        this._error(download, DownloadErrorCode.MAX_REDIRECTS)
       } else {
         this._error(download, DownloadErrorCode.NETWORK, err.message)
       }

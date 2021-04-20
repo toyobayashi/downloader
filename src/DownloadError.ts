@@ -10,6 +10,7 @@ export enum DownloadErrorCode {
   CREATE_FILE_FAILED = 16,
   FILE_IO = 17,
   MKDIR_FAILED = 18,
+  MAX_REDIRECTS = 23,
   AUTH_FAILED = 24,
   CUSTOM = 31
 }
@@ -27,6 +28,7 @@ export function getErrorMessage (code: DownloadErrorCode): string {
     case DownloadErrorCode.CREATE_FILE_FAILED: return 'Can not create new file'
     case DownloadErrorCode.FILE_IO: return 'File I/O error occurred'
     case DownloadErrorCode.MKDIR_FAILED: return 'Can not create directory'
+    case DownloadErrorCode.MAX_REDIRECTS: return 'Too many redirects occurred'
     case DownloadErrorCode.AUTH_FAILED: return 'Authorization failed'
     default: return 'Unknown error'
   }
