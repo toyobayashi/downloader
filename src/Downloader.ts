@@ -25,7 +25,7 @@ export interface IDownloadOptions {
 /** @public */
 export interface IDownloaderOptions extends Omit<IDownloadOptions, 'out'> {
   maxConcurrentDownloads: number
-  progressInterval: number
+  speedUpdateInterval: number
 }
 
 /** @public */
@@ -50,7 +50,7 @@ export class Downloader extends EventEmitter {
     maxConcurrentDownloads: 1,
     headers: {},
     agent: false,
-    progressInterval: 100
+    speedUpdateInterval: 60
   }
 
   private _lock: boolean = false
@@ -256,11 +256,14 @@ export class Downloader extends EventEmitter {
       return
     }
 
+    let loaded = 0
+
     const headers = download.headers
     let fileLength: number = 0
     if (existsSync(p + '.tmp')) {
       fileLength = statSync(p + '.tmp').size
       if (fileLength > 0) {
+        loaded = fileLength
         headers.Range = `bytes=${fileLength}-`
       }
     }
@@ -360,22 +363,24 @@ export class Downloader extends EventEmitter {
       if (targetStream == null) return
       const now = Date.now()
       const interval = now - start
-      if (interval > this.settings.progressInterval || download.downloadSpeed === 0 || (progress.transferred === (progress.total ?? contentLength))) {
-        const current = progress.transferred + fileLength
-        download.downloadSpeed = Math.floor((current - download.completedLength) / (interval / 1000))
+      const current = progress.transferred + fileLength
+      download.completedLength = current
+      if ((interval > this.settings.speedUpdateInterval) || download.downloadSpeed === 0 || (progress.transferred === (progress.total ?? contentLength))) {
+        download.downloadSpeed = Math.floor((current - loaded) / (interval / 1000))
         start = now
-        download.completedLength = current
-        if (this.listenerCount('progress') > 0) {
-          this.emit('progress', {
-            gid: download.gid,
-            totalLength: download.totalLength,
-            completedLength: download.completedLength,
-            downloadSpeed: download.downloadSpeed,
-            path: download.path,
-            url: download.url,
-            percent: download.totalLength === 0 ? 0 : (100 * (download.completedLength) / (download.totalLength))
-          })
-        }
+        loaded = current
+      }
+
+      if (this.listenerCount('progress') > 0) {
+        this.emit('progress', {
+          gid: download.gid,
+          totalLength: download.totalLength,
+          completedLength: download.completedLength,
+          downloadSpeed: download.downloadSpeed,
+          path: download.path,
+          url: download.url,
+          percent: download.totalLength === 0 ? 0 : (100 * (download.completedLength) / (download.totalLength))
+        })
       }
     })
 

@@ -1,11 +1,10 @@
 const { Downloader } = require('..')
 
 const downloader = new Downloader()
+downloader.settings.maxConcurrentDownloads = 1
 
 downloader.on('done', (download) => {
-  console.log('done')
-  console.log(download)
-  console.log(downloader.tellStopped())
+  console.log('\ndone: ' + download.path)
 })
 
 downloader.on('error', (err) => {
@@ -17,7 +16,7 @@ downloader.on('progress', (downloadProgress) => {
   // console.log(downloadProgress)
   process.stdout.clearLine(0)
   process.stdout.cursorTo(0)
-  process.stdout.write(`percent: ${downloadProgress.percent}, speed: ${downloadProgress.downloadSpeed}`)
+  process.stdout.write(`percent: ${downloadProgress.percent}, speed: ${downloadProgress.downloadSpeed / 1000} KB/s`)
 })
 
 const gid = downloader.add('https://npm.taobao.org/mirrors/electron/12.0.4/electron-v12.0.4-win32-x64.zip', {
