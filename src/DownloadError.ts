@@ -36,18 +36,11 @@ export function getErrorMessage (code: DownloadErrorCode): string {
 
 /** @public */
 export class DownloadError extends Error {
-  private readonly _code: DownloadErrorCode
-
-  public constructor (code: DownloadErrorCode, message?: string) {
+  public constructor (public gid: string, public url: string, public path: string, public code: DownloadErrorCode, message?: string) {
     super(message ?? getErrorMessage(code))
-    this._code = code
-  }
-
-  public get code (): DownloadErrorCode {
-    return this._code
   }
 
   public getErrorMessage (): string {
-    return getErrorMessage(this._code)
+    return getErrorMessage(this.code)
   }
 }

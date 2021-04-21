@@ -2,6 +2,7 @@ import { ObjectId } from '@tybys/oid'
 import { join } from 'path'
 import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
+import type { DownloadError } from './DownloadError'
 
 /** @public */
 export enum DownloadStatus {
@@ -20,8 +21,7 @@ export interface IDownload {
   totalLength: number
   completedLength: number
   downloadSpeed: number
-  errorCode: number
-  errorMessage: string
+  error: DownloadError | null
   path: string
   url: string
   // dir: string
@@ -41,8 +41,7 @@ export class Download implements IDownload {
   public totalLength = 0
   public completedLength = 0
   public downloadSpeed = 0
-  public errorCode = 0
-  public errorMessage = ''
+  public error: DownloadError | null = null
   public dir: string
   public path: string
   public url: string
