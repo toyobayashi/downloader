@@ -6,6 +6,7 @@ import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
 import { join } from 'path'
 import type { DownloadError } from './DownloadError'
+import { definePrivate, definePublic } from './util/def'
 
 /** @public */
 export enum DownloadOverwrite {
@@ -66,15 +67,6 @@ export interface IDownloadProgress {
   percent: number
 }
 
-function def (obj: any, key: string, value: any, writable: boolean = true): void {
-  Object.defineProperty(obj, key, {
-    configurable: true,
-    writable: writable,
-    enumerable: false,
-    value: value
-  })
-}
-
 type AgentType = {
   http?: HttpAgent
   https?: HttpsAgent
@@ -82,7 +74,7 @@ type AgentType = {
 } | false
 
 export class Download extends EventEmitter implements IDownload {
-  public readonly gid = new ObjectId().toHexString()
+  public readonly gid!: string
   public status: DownloadStatus = DownloadStatus.INIT
   public totalLength = 0
   public completedLength = 0
@@ -107,15 +99,16 @@ export class Download extends EventEmitter implements IDownload {
     this.url = url
     const p = join(dir, out)
     this.path = p
-    def(this, 'dir', dir, false)
-    def(this, 'out', out, false)
-    def(this, 'originPath', p, false)
-    def(this, 'renameCount', 0, true)
-    def(this, 'req', null, true)
-    def(this, 'headers', headers, false)
-    def(this, 'overwrite', overwrite, false)
-    def(this, 'agent', agent, false)
-    def(this, 'remove', null, true)
+    definePublic(this, 'gid', new ObjectId().toHexString(), false)
+    definePrivate(this, 'dir', dir, false)
+    definePrivate(this, 'out', out, false)
+    definePrivate(this, 'originPath', p, false)
+    definePrivate(this, 'renameCount', 0, true)
+    definePrivate(this, 'req', null, true)
+    definePrivate(this, 'headers', headers, false)
+    definePrivate(this, 'overwrite', overwrite, false)
+    definePrivate(this, 'agent', agent, false)
+    definePrivate(this, 'remove', null, true)
   }
 
   public whenStopped (): Promise<void> {

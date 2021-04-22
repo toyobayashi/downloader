@@ -12,7 +12,8 @@ export enum DownloadErrorCode {
   MKDIR_FAILED = 18,
   MAX_REDIRECTS = 23,
   AUTH_FAILED = 24,
-  CUSTOM = 31
+  CUSTOM = 31,
+  ABORT = 33
 }
 
 /** @public */
@@ -30,6 +31,7 @@ export function getErrorMessage (code: DownloadErrorCode): string {
     case DownloadErrorCode.MKDIR_FAILED: return 'Can not create directory'
     case DownloadErrorCode.MAX_REDIRECTS: return 'Too many redirects occurred'
     case DownloadErrorCode.AUTH_FAILED: return 'Authorization failed'
+    case DownloadErrorCode.ABORT: return 'Abort'
     default: return 'Unknown error'
   }
 }

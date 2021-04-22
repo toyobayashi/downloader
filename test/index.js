@@ -24,6 +24,11 @@ const electron1203 = downloader.add('https://npm.taobao.org/mirrors/electron/12.
 electron1204.on('progress', onProgress)
 electron1203.on('progress', onProgress)
 
+electron1204.on('fail', () => {
+  console.log('\nfail')
+  console.log(electron1204.error)
+})
+
 electron1204.whenStopped().then(download => {
   console.log('whenStopped ' + electron1204.gid)
 }).catch(err => {
@@ -35,3 +40,7 @@ electron1203.whenStopped().then(download => {
 }).catch(err => {
   console.log(err.message)
 })
+
+setTimeout(() => {
+  electron1204.abort()
+}, 2000)

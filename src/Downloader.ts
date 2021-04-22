@@ -10,6 +10,7 @@ import { DownloadStatus, Download, DownloadOverwrite } from './Download'
 import type { IDownload, DownloadEvent } from './Download'
 import { DownloadList } from './util/DownloadList'
 import { DownloadErrorCode, DownloadError } from './DownloadError'
+import { definePublic } from './util/def'
 
 /** @public */
 export interface IDownloadOptions {
@@ -36,14 +37,7 @@ export class Downloader extends EventEmitter {
     return __VERSION__
   }
 
-  public settings: IDownloaderOptions = {
-    dir: join(homedir(), 'Download'),
-    maxConcurrentDownloads: 1,
-    headers: {},
-    agent: false,
-    speedUpdateInterval: 100,
-    overwrite: DownloadOverwrite.NO
-  }
+  public readonly settings!: IDownloaderOptions
 
   private _lock: boolean = false
 
@@ -56,6 +50,42 @@ export class Downloader extends EventEmitter {
 
   public constructor () {
     super()
+    const defaultSettings = {
+      dir: join(homedir(), 'Download'),
+      headers: {},
+      agent: false,
+      speedUpdateInterval: 100,
+      overwrite: DownloadOverwrite.NO
+    }
+    let maxConcurrentDownloads = 1
+    Object.defineProperty(defaultSettings, 'maxConcurrentDownloads', {
+      configurable: true,
+      enumerable: true,
+      get () { return maxConcurrentDownloads },
+      set: (value: number) => {
+        if (this._lock) {
+          throw new Error('Can not set maxConcurrentDownloads')
+        }
+        const currentDownloading = this._downloadList.size
+        if (currentDownloading > value) {
+          throw new RangeError(`Can not set maxConcurrentDownloads to ${value}, current ${currentDownloading} downloading`)
+        }
+        maxConcurrentDownloads = value
+
+        let needActivateCount = maxConcurrentDownloads - currentDownloading
+        while (needActivateCount > 0) {
+          const nextDownload = this._waitingQueue.shift()
+          if (nextDownload) {
+            this._download(nextDownload)
+            needActivateCount--
+          } else {
+            break
+          }
+        }
+      }
+    })
+    definePublic(this, 'settings', defaultSettings, false)
+
     this._downloadList.on('remove', () => {
       if (!this._lock && this._downloadList.size < this.settings.maxConcurrentDownloads) {
         const nextDownload = this._waitingQueue.shift()
@@ -203,7 +233,7 @@ export class Downloader extends EventEmitter {
   public remove (gid: string | IDownload, removeFile?: boolean): void {
     const download = this._getDownload(gid)
     download.abort()
-    download.error = new DownloadError(download.gid, download.url, download.path, DownloadErrorCode.CUSTOM, 'Abort')
+    download.error = new DownloadError(download.gid, download.url, download.path, DownloadErrorCode.ABORT)
     download.status = DownloadStatus.REMOVED
     download.remove?.()
     if (removeFile) {
@@ -350,10 +380,13 @@ export class Downloader extends EventEmitter {
     })
 
     downloadStream.on('request', (request: ClientRequest) => {
-      request.abort = function abort () {
+      request.abort = () => {
         rename = false
         download.req = null
         request.destroy()
+        if (download.status === DownloadStatus.ACTIVE) {
+          this._error(download, DownloadErrorCode.ABORT)
+        }
       }
       download.req = request
       rename = true
@@ -394,8 +427,6 @@ export class Downloader extends EventEmitter {
         downloadStream.pipe(targetStream)
       } catch (err) {
         this._error(download, DownloadErrorCode.CREATE_FILE_FAILED)
-        // this._error(download, DownloadError.CUSTOM, err.message)
-        // return
       }
     })
 
