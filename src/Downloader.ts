@@ -6,7 +6,8 @@ import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
 import type { Progress, Response, RequestError } from 'got'
 import got from 'got'
-import { DownloadStatus, IDownload, Download, DownloadOverwrite } from './Download'
+import { DownloadStatus, Download, DownloadOverwrite } from './Download'
+import type { IDownload, DownloadEvent } from './Download'
 import { DownloadList } from './util/DownloadList'
 import { DownloadErrorCode, DownloadError } from './DownloadError'
 
@@ -27,17 +28,6 @@ export interface IDownloadOptions {
 export interface IDownloaderOptions extends Omit<IDownloadOptions, 'out'> {
   maxConcurrentDownloads: number
   speedUpdateInterval: number
-}
-
-/** @public */
-export interface IDownloadProgress {
-  gid: string
-  totalLength: number
-  completedLength: number
-  downloadSpeed: number
-  path: string
-  url: string
-  percent: number
 }
 
 /** @public */
@@ -74,55 +64,33 @@ export class Downloader extends EventEmitter {
         }
       }
     })
-    // this.on('done', () => {
-    //   const nextDownload = this._waitingQueue.shift()
-    //   if (nextDownload) {
-    //     this._downloadList.push(nextDownload)
-    //     this._download(nextDownload)
-    //   }
-    // })
   }
 
-  public whenStopped (gid: string | Readonly<IDownload>): Promise<Readonly<IDownload>> {
-    let download: Readonly<IDownload> | undefined
+  private _getDownload (gid: string | IDownload): Download {
+    let download: Download | undefined
     if (typeof gid === 'string') {
       download = this._downloads.get(gid)
       if (!download) {
         throw new Error('Can not find download with given gid: ' + gid)
       }
     } else {
+      if (!(gid instanceof Download)) {
+        throw new TypeError('Requires IDownload object but recieved "' + typeof download + '"')
+      }
       download = gid
-      if (!(download instanceof Download)) {
-        throw new TypeError('whenStopped requires a IDownload object but recieved "' + typeof download + '"')
-      }
     }
-
-    return new Promise((resolve, reject) => {
-      const handler = (download: Readonly<IDownload>): boolean => {
-        if (download.gid !== gid) return true
-        this.off('done', handler)
-        if (download.status === DownloadStatus.ERROR || download.status === DownloadStatus.REMOVED) {
-          reject(download.error)
-          return false
-        }
-        if (download.status === DownloadStatus.COMPLETE) {
-          resolve(download)
-          return false
-        }
-        return true
-      }
-
-      if (handler(download!)) {
-        this.on('done', handler)
-      }
-    })
+    return download
   }
 
-  public add (url: string, options?: Partial<IDownloadOptions>): string {
+  public whenStopped (gid: string | IDownload): Promise<void> {
+    const download = this._getDownload(gid)
+    return download.whenStopped()
+  }
+
+  public add (url: string, options?: Partial<IDownloadOptions>): IDownload {
     const dir = options?.dir ?? this.settings.dir
     const out = options?.out ?? basename(url)
-    const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
-    const download = new Download(url, dir, needWait ? DownloadStatus.WAITING : DownloadStatus.ACTIVE)
+    const download = new Download(url, dir, DownloadStatus.INIT)
     download.overwrite = options?.overwrite ?? this.settings.overwrite
     download.path = join(dir, out)
 
@@ -150,28 +118,27 @@ export class Downloader extends EventEmitter {
               ...optionsAgent
             })
     this._downloads.set(download.gid, download)
-    if (needWait) {
-      download.status = DownloadStatus.WAITING
-      this._waitingQueue.push(download)
-    } else {
-      this._download(download)
-    }
-    return download.gid
+    process.nextTick(() => {
+      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
+      if (needWait) {
+        download.status = DownloadStatus.WAITING
+        this._waitingQueue.push(download)
+      } else {
+        this._download(download)
+      }
+    })
+    return download
   }
 
-  public pause (gid: string): boolean {
-    const download: Download | undefined = this._downloads.get(gid)
-    if (download) {
-      this._pause(download)
-      return true
-    }
-    return false
+  public pause (gid: string | IDownload): void {
+    this._pause(this._getDownload(gid))
   }
 
   private _pause (download: Download): void {
     download.req?.abort()
     download.status = DownloadStatus.PAUSED
     this._pausedList.push(download)
+    this._emitDownloadEvent(download, 'pause')
   }
 
   public pauseAll (): void {
@@ -185,9 +152,14 @@ export class Downloader extends EventEmitter {
     this._lock = false
   }
 
-  public unpause (gid: string): boolean {
-    const download: Download | undefined = this._downloads.get(gid)
-    if (download && (download.status === DownloadStatus.PAUSED)) {
+  public unpause (gid: string | IDownload): void {
+    const download = this._getDownload(gid)
+    if (download.status !== DownloadStatus.PAUSED) {
+      throw new Error('Not a paused download')
+    }
+    download.status = DownloadStatus.INIT
+    this._emitDownloadEvent(download, 'unpause')
+    process.nextTick(() => {
       const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
       if (needWait) {
         download.status = DownloadStatus.WAITING
@@ -195,9 +167,7 @@ export class Downloader extends EventEmitter {
       } else {
         this._download(download)
       }
-      return true
-    }
-    return false
+    })
   }
 
   public unpauseAll (): void {
@@ -214,41 +184,50 @@ export class Downloader extends EventEmitter {
     this._lock = false
   }
 
-  public tellActive (): Array<Readonly<IDownload>> {
+  public tellActive (): IDownload[] {
     return this._downloadList.toArray()
   }
 
-  public tellWaiting (): Array<Readonly<IDownload>> {
+  public countActive (): number {
+    return this._downloadList.size
+  }
+
+  public tellWaiting (): IDownload[] {
     return this._waitingQueue.toArray()
   }
 
-  public tellStopped (): Array<Readonly<IDownload>> {
+  public countWaiting (): number {
+    return this._waitingQueue.size
+  }
+
+  public tellStopped (): IDownload[] {
     return [...this._completedList.toArray(), ...this._errorList.toArray()]
   }
 
-  public remove (gid: string, removeFile?: boolean): boolean {
-    const download: Download | undefined = this._downloads.get(gid)
-    if (download) {
-      download.req?.abort()
-      download.error = new DownloadError(download.gid, download.url, download.path, DownloadErrorCode.CUSTOM, 'Abort')
-      download.status = DownloadStatus.REMOVED
-      download.remove?.()
-      if (removeFile) {
-        try {
-          const tmpFile = `${download.path}.tmp`
-          if (existsSync(tmpFile) && statSync(tmpFile).isFile()) {
-            unlinkSync(tmpFile)
-          }
-          if (existsSync(download.path) && statSync(download.path).isFile()) {
-            unlinkSync(download.path)
-          }
-        } catch (_) {}
-      }
-      this._downloads.delete(gid)
-      this.emit('done', download)
-      return true
+  public countStopped (): number {
+    return this._completedList.size + this._errorList.size
+  }
+
+  public remove (gid: string | IDownload, removeFile?: boolean): void {
+    const download = this._getDownload(gid)
+    download.req?.abort()
+    download.error = new DownloadError(download.gid, download.url, download.path, DownloadErrorCode.CUSTOM, 'Abort')
+    download.status = DownloadStatus.REMOVED
+    download.remove?.()
+    if (removeFile) {
+      try {
+        const tmpFile = `${download.path}.tmp`
+        if (existsSync(tmpFile) && statSync(tmpFile).isFile()) {
+          unlinkSync(tmpFile)
+        }
+        if (existsSync(download.path) && statSync(download.path).isFile()) {
+          unlinkSync(download.path)
+        }
+      } catch (_) {}
     }
-    return false
+    this._downloads.delete(download.gid)
+    this._emitDownloadEvent(download, 'remove')
+    this._emitDownloadEvent(download, 'done')
   }
 
   public removeAll (removeFile?: boolean): void {
@@ -260,26 +239,22 @@ export class Downloader extends EventEmitter {
     this._lock = false
   }
 
-  public tellStatus (gid: string): Readonly<IDownload> | undefined {
+  public tellStatus (gid: string): IDownload | undefined {
     return this._downloads.get(gid)
   }
 
   private _error (download: Download, code: DownloadErrorCode, customErrorMessage?: string): void {
     if (download.status !== DownloadStatus.COMPLETE && download.status !== DownloadStatus.ERROR) {
-      download.downloadSpeed = 0
       if (code === 0) {
-        download.status = DownloadStatus.COMPLETE
-        download.error = null
-        this._completedList.push(download)
-        this.emit('complete', download)
+        this._complete(download)
       } else {
+        download.downloadSpeed = 0
         download.status = DownloadStatus.ERROR
         download.error = new DownloadError(download.gid, download.url, download.path, code, customErrorMessage)
         this._errorList.push(download)
-        this.emit('fail', download)
-        this.emit('error', download.error)
+        this._emitDownloadEvent(download, 'fail')
+        this._emitDownloadEvent(download, 'done')
       }
-      this.emit('done', download)
     }
   }
 
@@ -289,8 +264,8 @@ export class Downloader extends EventEmitter {
       download.status = DownloadStatus.COMPLETE
       download.error = null
       this._completedList.push(download)
-      this.emit('complete', download)
-      this.emit('done', download)
+      this._emitDownloadEvent(download, 'complete')
+      this._emitDownloadEvent(download, 'done')
     }
   }
 
@@ -436,8 +411,8 @@ export class Downloader extends EventEmitter {
         loaded = current
       }
 
-      if (this.listenerCount('progress') > 0) {
-        this.emit('progress', {
+      if (download.listenerCount('progress') > 0) {
+        download.emit('progress', {
           gid: download.gid,
           totalLength: download.totalLength,
           completedLength: download.completedLength,
@@ -448,31 +423,23 @@ export class Downloader extends EventEmitter {
         })
       }
     })
-
-    // downloadStream.pipe(targetStream)
   }
 
-  public on (event: 'progress', listener: (downloadProgress: IDownloadProgress) => void): this
-  public on (event: 'complete', listener: (download: Readonly<IDownload>) => void): this
-  public on (event: 'fail', listener: (download: Readonly<IDownload>) => void): this
-  public on (event: 'error', listener: (err: DownloadError) => void): this
-  public on (event: 'done', listener: (download: Readonly<IDownload>) => void): this
+  public on (event: DownloadEvent, listener: (download: IDownload) => void): this
   public on (event: string, listener: (...args: any[]) => void): this
   public on (event: string, listener: (...args: any[]) => void): this { return (super.on(event, listener), this) }
 
-  public once (event: 'progress', listener: (downloadProgress: IDownloadProgress) => void): this
-  public once (event: 'complete', listener: (download: Readonly<IDownload>) => void): this
-  public once (event: 'fail', listener: (download: Readonly<IDownload>) => void): this
-  public once (event: 'error', listener: (err: DownloadError) => void): this
-  public once (event: 'done', listener: (download: Readonly<IDownload>) => void): this
+  public once (event: DownloadEvent, listener: (download: IDownload) => void): this
   public once (event: string, listener: (...args: any[]) => void): this
   public once (event: string, listener: (...args: any[]) => void): this { return (super.once(event, listener), this) }
 
-  public off (event: 'progress', listener: (downloadProgress: IDownloadProgress) => void): this
-  public off (event: 'complete', listener: (download: Readonly<IDownload>) => void): this
-  public off (event: 'fail', listener: (download: Readonly<IDownload>) => void): this
-  public off (event: 'error', listener: (err: DownloadError) => void): this
-  public off (event: 'done', listener: (download: Readonly<IDownload>) => void): this
+  public off (event: DownloadEvent, listener: (download: IDownload) => void): this
   public off (event: string, listener: (...args: any[]) => void): this
   public off (event: string, listener: (...args: any[]) => void): this { return (super.off(event, listener), this) }
+
+  private _emitDownloadEvent (download: IDownload, event: DownloadEvent, ...args: any[]): this {
+    download.emit(event, ...args)
+    this.emit(event, download, ...args)
+    return this
+  }
 }

@@ -6,13 +6,12 @@
 
 export { DownloadErrorCode, getErrorMessage, DownloadError } from './DownloadError'
 
-export type { IDownload } from './Download'
+export type { IDownload, IDownloadProgress, DownloadEvent } from './Download'
 export { DownloadStatus, DownloadOverwrite } from './Download'
 
 export type {
   IDownloadOptions,
-  IDownloaderOptions,
-  IDownloadProgress
+  IDownloaderOptions
 } from './Downloader'
 
 export {
