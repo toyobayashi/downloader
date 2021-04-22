@@ -126,10 +126,10 @@ export class Downloader extends EventEmitter {
     if (overwrite === DownloadOverwrite.RENAME) {
       const downloadArray = [...this._downloads.values()]
       const p = parse(download.originPath)
-      do {
+      while (downloadArray.some(d => d.path === download.path)) {
         download.renameCount++
         download.path = join(dirname(download.originPath), p.name + ` (${download.renameCount})` + p.ext)
-      } while (downloadArray.some(d => d.path === download.path))
+      }
     }
 
     this._downloads.set(download.gid, download)
