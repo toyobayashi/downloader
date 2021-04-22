@@ -66,37 +66,56 @@ export interface IDownloadProgress {
   percent: number
 }
 
+function def (obj: any, key: string, value: any, writable: boolean = true): void {
+  Object.defineProperty(obj, key, {
+    configurable: true,
+    writable: writable,
+    enumerable: false,
+    value: value
+  })
+}
+
+type AgentType = {
+  http?: HttpAgent
+  https?: HttpsAgent
+  http2?: unknown
+} | false
+
 export class Download extends EventEmitter implements IDownload {
-  public gid = new ObjectId().toHexString()
-  public status: DownloadStatus
+  public readonly gid = new ObjectId().toHexString()
+  public status: DownloadStatus = DownloadStatus.INIT
   public totalLength = 0
   public completedLength = 0
   public downloadSpeed = 0
   public error: DownloadError | null = null
-  public dir: string
-  public path!: string
-  public out: string
-  public readonly originPath: string
-  public renameCount: number = 0
-  public url: string
-  public req: ClientRequest | null = null
-  public headers!: Record<string, string>
-  public overwrite: DownloadOverwrite = DownloadOverwrite.NO
-  public agent: {
-    http?: HttpAgent
-    https?: HttpsAgent
-    http2?: unknown
-  } | false = false
+  public path: string
+  public readonly url: string
 
-  public remove: null | (() => void) = null
+  public readonly dir!: string
+  public readonly out!: string
+  public readonly originPath!: string
+  public renameCount!: number
+  public req!: ClientRequest | null
+  public readonly headers!: Record<string, string>
+  public readonly overwrite!: DownloadOverwrite
+  public readonly agent!: AgentType
 
-  public constructor (url: string, dir: string, out: string, status: DownloadStatus) {
+  public remove!: null | (() => void)
+
+  public constructor (url: string, dir: string, out: string, headers: Record<string, string>, overwrite: DownloadOverwrite, agent: AgentType) {
     super()
-    this.dir = dir
-    this.status = status
     this.url = url
-    this.out = out
-    this.originPath = join(dir, out)
+    const p = join(dir, out)
+    this.path = p
+    def(this, 'dir', dir, false)
+    def(this, 'out', out, false)
+    def(this, 'originPath', p, false)
+    def(this, 'renameCount', 0, true)
+    def(this, 'req', null, true)
+    def(this, 'headers', headers, false)
+    def(this, 'overwrite', overwrite, false)
+    def(this, 'agent', agent, false)
+    def(this, 'remove', null, true)
   }
 
   public whenStopped (): Promise<void> {

@@ -107,11 +107,23 @@ export class Downloader extends EventEmitter {
   public add (url: string, options?: Partial<IDownloadOptions>): IDownload {
     const dir = options?.dir ?? this.settings.dir
     const out = options?.out ?? basename(url)
-    const download = new Download(url, dir, out, DownloadStatus.INIT)
-    download.overwrite = options?.overwrite ?? this.settings.overwrite
-    download.path = download.originPath
+    const headers = {
+      ...this.settings.headers,
+      ...(options?.headers ?? {})
+    }
+    const overwrite = options?.overwrite ?? this.settings.overwrite
+    const optionsAgent = options?.agent
+    const agent = optionsAgent === false
+      ? false
+      : (this.settings.agent === false
+          ? optionsAgent!
+          : {
+              ...this.settings.agent,
+              ...optionsAgent
+            })
+    const download = new Download(url, dir, out, headers, overwrite, agent)
 
-    if (download.overwrite === DownloadOverwrite.RENAME) {
+    if (overwrite === DownloadOverwrite.RENAME) {
       const downloadArray = [...this._downloads.values()]
       const p = parse(download.originPath)
       do {
@@ -120,19 +132,6 @@ export class Downloader extends EventEmitter {
       } while (downloadArray.some(d => d.path === download.path))
     }
 
-    download.headers = {
-      ...this.settings.headers,
-      ...(options?.headers ?? {})
-    }
-    const optionsAgent = options?.agent
-    download.agent = optionsAgent === false
-      ? false
-      : (this.settings.agent === false
-          ? optionsAgent!
-          : {
-              ...this.settings.agent,
-              ...optionsAgent
-            })
     this._downloads.set(download.gid, download)
     this._start(download)
     return download
