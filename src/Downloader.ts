@@ -1,12 +1,12 @@
 import { homedir } from 'os'
-import { join, basename, dirname } from 'path'
+import { join, basename, dirname, parse } from 'path'
 import { mkdirSync, existsSync, statSync, createWriteStream, unlinkSync, renameSync, WriteStream } from 'fs'
 import { EventEmitter } from 'events'
 import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
 import type { Progress, Response, RequestError } from 'got'
 import got from 'got'
-import { DownloadStatus, IDownload, Download } from './Download'
+import { DownloadStatus, IDownload, Download, DownloadOverwrite } from './Download'
 import { DownloadList } from './util/DownloadList'
 import { DownloadErrorCode, DownloadError } from './DownloadError'
 
@@ -15,6 +15,7 @@ export interface IDownloadOptions {
   dir: string
   out: string
   headers: Record<string, string>
+  overwrite: DownloadOverwrite
   agent: {
     http?: HttpAgent
     https?: HttpsAgent
@@ -50,7 +51,8 @@ export class Downloader extends EventEmitter {
     maxConcurrentDownloads: 1,
     headers: {},
     agent: false,
-    speedUpdateInterval: 100
+    speedUpdateInterval: 100,
+    overwrite: DownloadOverwrite.NO
   }
 
   private _lock: boolean = false
@@ -116,11 +118,24 @@ export class Downloader extends EventEmitter {
     })
   }
 
-  public add (url: string, options?: IDownloadOptions): string {
+  public add (url: string, options?: Partial<IDownloadOptions>): string {
     const dir = options?.dir ?? this.settings.dir
     const out = options?.out ?? basename(url)
     const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
-    const download = new Download(url, dir, out, needWait ? DownloadStatus.WAITING : DownloadStatus.ACTIVE)
+    const download = new Download(url, dir, needWait ? DownloadStatus.WAITING : DownloadStatus.ACTIVE)
+    download.overwrite = options?.overwrite ?? this.settings.overwrite
+    download.path = join(dir, out)
+
+    if (download.overwrite === DownloadOverwrite.RENAME) {
+      const downloadArray = [...this._downloads.values()]
+      let n = 1
+      while (downloadArray.some(d => d.path === download.path)) {
+        const p = parse(download.path)
+        download.path = join(dirname(download.path), p.name + ` (${n})` + p.ext)
+        n++
+      }
+    }
+
     download.headers = {
       ...this.settings.headers,
       ...(options?.headers ?? {})
@@ -289,9 +304,21 @@ export class Downloader extends EventEmitter {
       this._error(download, DownloadErrorCode.MKDIR_FAILED)
       return
     }
-    if (existsSync(p)) {
-      this._error(download, DownloadErrorCode.FILE_EXISTS)
-      return
+
+    if (download.overwrite === DownloadOverwrite.NO) {
+      if (existsSync(p)) {
+        this._error(download, DownloadErrorCode.FILE_EXISTS)
+        return
+      }
+    } else if (download.overwrite === DownloadOverwrite.YES) {
+      if (existsSync(p)) {
+        try {
+          unlinkSync(p)
+        } catch (_) {
+          this._error(download, DownloadErrorCode.FILE_IO)
+          return
+        }
+      }
     }
 
     let loaded = 0

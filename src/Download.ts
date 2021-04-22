@@ -1,8 +1,14 @@
 import { ObjectId } from '@tybys/oid'
-import { join } from 'path'
 import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
 import type { DownloadError } from './DownloadError'
+
+/** @public */
+export enum DownloadOverwrite {
+  NO,
+  YES,
+  RENAME
+}
 
 /** @public */
 export enum DownloadStatus {
@@ -43,10 +49,11 @@ export class Download implements IDownload {
   public downloadSpeed = 0
   public error: DownloadError | null = null
   public dir: string
-  public path: string
+  public path!: string
   public url: string
   public req: ClientRequest | null = null
   public headers!: Record<string, string>
+  public overwrite: DownloadOverwrite = DownloadOverwrite.NO
   public agent: {
     http?: HttpAgent
     https?: HttpsAgent
@@ -55,10 +62,9 @@ export class Download implements IDownload {
 
   public remove: null | (() => void) = null
 
-  public constructor (url: string, dir: string, out: string, status: DownloadStatus) {
+  public constructor (url: string, dir: string, status: DownloadStatus) {
     this.dir = dir
     this.status = status
     this.url = url
-    this.path = join(dir, out)
   }
 }
