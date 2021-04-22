@@ -78,33 +78,21 @@ export class DownloadList extends LinkedList<Download> {
     return arr
   }
 
-  public on (event: 'push', listener: (element: Readonly<IDownload>) => void): this
-  public on (event: 'unshift', listener: (element: Readonly<IDownload>) => void): this
-  public on (event: 'pop', listener: (element: Readonly<IDownload>) => void): this
-  public on (event: 'shift', listener: (element: Readonly<IDownload>) => void): this
-  public on (event: 'remove', listener: (element: Readonly<IDownload>) => void): this
+  public on (event: Exclude<EventType, 'clear'>, listener: (element: IDownload) => void): this
   public on (event: 'clear', listener: () => void): this
   public on (event: string, listener: (...args: any[]) => void): this {
     this._event.on(event, listener)
     return this
   }
 
-  public once (event: 'push', listener: (element: Readonly<IDownload>) => void): this
-  public once (event: 'unshift', listener: (element: Readonly<IDownload>) => void): this
-  public once (event: 'pop', listener: (element: Readonly<IDownload>) => void): this
-  public once (event: 'shift', listener: (element: Readonly<IDownload>) => void): this
-  public once (event: 'remove', listener: (element: Readonly<IDownload>) => void): this
+  public once (event: Exclude<EventType, 'clear'>, listener: (element: IDownload) => void): this
   public once (event: 'clear', listener: () => void): this
   public once (event: string, listener: (...args: any[]) => void): this {
     this._event.once(event, listener)
     return this
   }
 
-  public off (event: 'push', listener: (element: Readonly<IDownload>) => void): this
-  public off (event: 'unshift', listener: (element: Readonly<IDownload>) => void): this
-  public off (event: 'pop', listener: (element: Readonly<IDownload>) => void): this
-  public off (event: 'shift', listener: (element: Readonly<IDownload>) => void): this
-  public off (event: 'remove', listener: (element: Readonly<IDownload>) => void): this
+  public off (event: Exclude<EventType, 'clear'>, listener: (element: IDownload) => void): this
   public off (event: 'clear', listener: () => void): this
   public off (event: string, listener: (...args: any[]) => void): this {
     this._event.off(event, listener)
