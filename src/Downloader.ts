@@ -37,6 +37,18 @@ export class Downloader extends EventEmitter {
     return __VERSION__
   }
 
+  public static download (url: string, options?: IDownloadOptions): IDownload {
+    const downloader = new Downloader()
+    downloader.settings.maxConcurrentDownloads = 1
+    const downloadObject = downloader.add(url, options)
+    downloadObject.once('done', () => {
+      process.nextTick(() => {
+        downloader.dispose()
+      })
+    })
+    return downloadObject
+  }
+
   public readonly settings!: IDownloaderOptions
 
   private _lock!: boolean
