@@ -10,7 +10,7 @@ import { DownloadStatus, Download, DownloadOverwrite } from './Download'
 import type { IDownload, DownloadEvent } from './Download'
 import { DownloadList } from './util/DownloadList'
 import { DownloadErrorCode, DownloadError } from './DownloadError'
-import { definePublic } from './util/def'
+import { definePrivate, definePublic } from './util/def'
 
 /** @public */
 export interface IDownloadOptions {
@@ -39,7 +39,8 @@ export class Downloader extends EventEmitter {
 
   public readonly settings!: IDownloaderOptions
 
-  private _lock: boolean = false
+  private _lock!: boolean
+  private _disposed!: boolean
 
   private readonly _downloadList: DownloadList = new DownloadList()
   private readonly _waitingQueue: DownloadList = new DownloadList()
@@ -50,6 +51,8 @@ export class Downloader extends EventEmitter {
 
   public constructor () {
     super()
+    definePrivate(this, '_lock', false, true)
+    definePrivate(this, '_disposed', false, true)
     const defaultSettings = {
       dir: join(homedir(), 'Download'),
       headers: {},
@@ -475,9 +478,11 @@ export class Downloader extends EventEmitter {
   }
 
   public dispose (): void {
+    if (this._disposed) return
+    this._disposed = true
+    this.removeAllListeners()
     for (const download of this._downloads.values()) {
-      download.remove?.()
-      download.abort()
+      download.dispose()
     }
     this._downloadList.dispose()
     this._waitingQueue.dispose()

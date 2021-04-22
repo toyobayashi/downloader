@@ -94,6 +94,8 @@ export class Download extends EventEmitter implements IDownload {
 
   public remove!: null | (() => void)
 
+  private _disposed!: boolean
+
   public constructor (url: string, dir: string, out: string, headers: Record<string, string>, overwrite: DownloadOverwrite, agent: AgentType) {
     super()
     this.url = url
@@ -109,6 +111,7 @@ export class Download extends EventEmitter implements IDownload {
     definePrivate(this, 'overwrite', overwrite, false)
     definePrivate(this, 'agent', agent, false)
     definePrivate(this, 'remove', null, true)
+    definePrivate(this, '_disposed', false, true)
   }
 
   public whenStopped (): Promise<void> {
@@ -133,5 +136,15 @@ export class Download extends EventEmitter implements IDownload {
 
   public abort (): void {
     this.req?.abort()
+  }
+
+  public dispose (): void {
+    if (this._disposed) return
+    this._disposed = true
+    this.removeAllListeners()
+    this.remove?.()
+    this.remove = null
+    this.abort()
+    this.req = null
   }
 }
