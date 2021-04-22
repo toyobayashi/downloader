@@ -82,6 +82,23 @@ export class Downloader extends EventEmitter {
     return download
   }
 
+  private _queue (download: Download): void {
+    download.status = DownloadStatus.WAITING
+    this._waitingQueue.push(download)
+    this._emitDownloadEvent(download, 'queue')
+  }
+
+  private _start (download: Download): void {
+    process.nextTick(() => {
+      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
+      if (needWait) {
+        this._queue(download)
+      } else {
+        this._download(download)
+      }
+    })
+  }
+
   public whenStopped (gid: string | IDownload): Promise<void> {
     const download = this._getDownload(gid)
     return download.whenStopped()
@@ -90,18 +107,17 @@ export class Downloader extends EventEmitter {
   public add (url: string, options?: Partial<IDownloadOptions>): IDownload {
     const dir = options?.dir ?? this.settings.dir
     const out = options?.out ?? basename(url)
-    const download = new Download(url, dir, DownloadStatus.INIT)
+    const download = new Download(url, dir, out, DownloadStatus.INIT)
     download.overwrite = options?.overwrite ?? this.settings.overwrite
-    download.path = join(dir, out)
+    download.path = download.originPath
 
     if (download.overwrite === DownloadOverwrite.RENAME) {
       const downloadArray = [...this._downloads.values()]
-      let n = 1
-      while (downloadArray.some(d => d.path === download.path)) {
-        const p = parse(download.path)
-        download.path = join(dirname(download.path), p.name + ` (${n})` + p.ext)
-        n++
-      }
+      const p = parse(download.originPath)
+      do {
+        download.renameCount++
+        download.path = join(dirname(download.originPath), p.name + ` (${download.renameCount})` + p.ext)
+      } while (downloadArray.some(d => d.path === download.path))
     }
 
     download.headers = {
@@ -118,15 +134,7 @@ export class Downloader extends EventEmitter {
               ...optionsAgent
             })
     this._downloads.set(download.gid, download)
-    process.nextTick(() => {
-      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
-      if (needWait) {
-        download.status = DownloadStatus.WAITING
-        this._waitingQueue.push(download)
-      } else {
-        this._download(download)
-      }
-    })
+    this._start(download)
     return download
   }
 
@@ -135,7 +143,7 @@ export class Downloader extends EventEmitter {
   }
 
   private _pause (download: Download): void {
-    download.req?.abort()
+    download.abort()
     download.status = DownloadStatus.PAUSED
     this._pausedList.push(download)
     this._emitDownloadEvent(download, 'pause')
@@ -157,29 +165,14 @@ export class Downloader extends EventEmitter {
     if (download.status !== DownloadStatus.PAUSED) {
       throw new Error('Not a paused download')
     }
-    download.status = DownloadStatus.INIT
     this._emitDownloadEvent(download, 'unpause')
-    process.nextTick(() => {
-      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
-      if (needWait) {
-        download.status = DownloadStatus.WAITING
-        this._waitingQueue.push(download)
-      } else {
-        this._download(download)
-      }
-    })
+    this._start(download)
   }
 
   public unpauseAll (): void {
     this._lock = true
     for (const download of this._pausedList.toArray()) {
-      const needWait = this._downloadList.size >= this.settings.maxConcurrentDownloads
-      if (needWait) {
-        download.status = DownloadStatus.WAITING
-        this._waitingQueue.push(download)
-      } else {
-        this._download(download)
-      }
+      this.unpause(download)
     }
     this._lock = false
   }
@@ -210,7 +203,7 @@ export class Downloader extends EventEmitter {
 
   public remove (gid: string | IDownload, removeFile?: boolean): void {
     const download = this._getDownload(gid)
-    download.req?.abort()
+    download.abort()
     download.error = new DownloadError(download.gid, download.url, download.path, DownloadErrorCode.CUSTOM, 'Abort')
     download.status = DownloadStatus.REMOVED
     download.remove?.()
@@ -272,7 +265,8 @@ export class Downloader extends EventEmitter {
   private _download (download: Download): void {
     download.status = DownloadStatus.ACTIVE
     this._downloadList.push(download)
-    const p = download.path
+    this._emitDownloadEvent(download, 'activate')
+    let p = download.path
     try {
       mkdirSync(dirname(p), { recursive: true })
     } catch (_) {
@@ -293,6 +287,13 @@ export class Downloader extends EventEmitter {
           this._error(download, DownloadErrorCode.FILE_IO)
           return
         }
+      }
+    } else if (download.overwrite === DownloadOverwrite.RENAME) {
+      const obj = parse(download.originPath)
+      while (existsSync(p)) {
+        download.renameCount++
+        download.path = join(dirname(download.originPath), obj.name + ` (${download.renameCount})` + obj.ext)
+        p = download.path
       }
     }
 
@@ -329,7 +330,7 @@ export class Downloader extends EventEmitter {
 
     downloadStream.on('error', (err: RequestError) => {
       rename = false
-      download.req?.abort()
+      download.abort()
       download.req = null
       targetStream?.close()
       if (err instanceof got.TimeoutError) {
@@ -441,5 +442,18 @@ export class Downloader extends EventEmitter {
     download.emit(event, ...args)
     this.emit(event, download, ...args)
     return this
+  }
+
+  public dispose (): void {
+    for (const download of this._downloads.values()) {
+      download.remove?.()
+      download.abort()
+    }
+    this._downloadList.dispose()
+    this._waitingQueue.dispose()
+    this._pausedList.dispose()
+    this._completedList.dispose()
+    this._errorList.dispose()
+    this._downloads.clear()
   }
 }

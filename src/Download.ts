@@ -4,6 +4,7 @@ import { ObjectId } from '@tybys/oid'
 import { EventEmitter } from 'events'
 import type { Agent as HttpAgent, ClientRequest } from 'http'
 import type { Agent as HttpsAgent } from 'https'
+import { join } from 'path'
 import type { DownloadError } from './DownloadError'
 
 /** @public */
@@ -25,7 +26,7 @@ export enum DownloadStatus {
 }
 
 /** @public */
-export type DownloadEvent = 'complete' | 'fail' | 'pause' | 'unpause' | 'remove' | 'done'
+export type DownloadEvent = 'queue' | 'activate' | 'complete' | 'fail' | 'pause' | 'unpause' | 'remove' | 'done'
 
 /** @public */
 export interface IDownload extends EventEmitter {
@@ -50,6 +51,7 @@ export interface IDownload extends EventEmitter {
   off (event: DownloadEvent, listener: () => void): this
   off (event: string, listener: (...args: any[]) => void): this
 
+  abort (): void
   whenStopped (): Promise<void>
 }
 
@@ -73,6 +75,9 @@ export class Download extends EventEmitter implements IDownload {
   public error: DownloadError | null = null
   public dir: string
   public path!: string
+  public out: string
+  public readonly originPath: string
+  public renameCount: number = 0
   public url: string
   public req: ClientRequest | null = null
   public headers!: Record<string, string>
@@ -85,11 +90,13 @@ export class Download extends EventEmitter implements IDownload {
 
   public remove: null | (() => void) = null
 
-  public constructor (url: string, dir: string, status: DownloadStatus) {
+  public constructor (url: string, dir: string, out: string, status: DownloadStatus) {
     super()
     this.dir = dir
     this.status = status
     this.url = url
+    this.out = out
+    this.originPath = join(dir, out)
   }
 
   public whenStopped (): Promise<void> {
@@ -110,5 +117,9 @@ export class Download extends EventEmitter implements IDownload {
         this.once('done', handler)
       }
     })
+  }
+
+  public abort (): void {
+    this.req?.abort()
   }
 }

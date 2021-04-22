@@ -1,7 +1,8 @@
-const { Downloader } = require('..')
+const { Downloader, DownloadOverwrite } = require('..')
 
 const downloader = new Downloader()
 downloader.settings.maxConcurrentDownloads = 1
+downloader.settings.overwrite = DownloadOverwrite.RENAME
 
 const onProgress = (downloadProgress) => {
   if (process.stdout.clearLine) {
