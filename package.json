@@ -1,6 +1,6 @@
 {
   "name": "@tybys/downloader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tiny downloader in Node.js",
   "typings": "./lib/cjs-modern/index.d.ts",
   "main": "./lib/cjs-modern/index.js",
@@ -18,6 +18,14 @@
   },
   "keywords": [],
   "author": "toyobayashi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toyobayashi/downloader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/toyobayashi/downloader/issues"
+  },
+  "homepage": "https://github.com/toyobayashi/downloader#readme",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
