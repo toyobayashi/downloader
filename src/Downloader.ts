@@ -398,7 +398,7 @@ export class Downloader extends EventEmitter {
 
     downloadStream.on('error', (err: RequestError) => {
       rename = false
-      download.abort()
+      // download.abort()
       download.req = null
       targetStream?.close()
       if (err instanceof got.TimeoutError) {
@@ -448,7 +448,7 @@ export class Downloader extends EventEmitter {
             return
           }
 
-          if (rename && (tmpFileSize === fileLength + contentLength)) {
+          if (rename && (res.headers['content-length'] != null ? (tmpFileSize === (fileLength + contentLength)) : true)) {
             try {
               renameSync(p + '.tmp', p)
               this._complete(download)
