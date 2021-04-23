@@ -516,15 +516,17 @@ export class Downloader extends EventEmitter {
   public dispose (): void {
     if (this._disposed) return
     this._disposed = true
+    this._lock = true
     this.removeAllListeners()
     for (const download of this._downloads.values()) {
       download.dispose()
     }
-    this._downloadList.dispose()
     this._waitingQueue.dispose()
+    this._downloadList.dispose()
     this._pausedList.dispose()
     this._completedList.dispose()
     this._errorList.dispose()
     this._downloads.clear()
+    this._lock = false
   }
 }
