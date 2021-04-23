@@ -245,6 +245,30 @@ export class Downloader extends EventEmitter {
     return this._completedList.size + this._errorList.size
   }
 
+  public tellCompleted (): IDownload[] {
+    return this._completedList.toArray()
+  }
+
+  public countCompleted (): number {
+    return this._completedList.size
+  }
+
+  public tellFailed (): IDownload[] {
+    return this._errorList.toArray()
+  }
+
+  public countFailed (): number {
+    return this._errorList.size
+  }
+
+  public tellPaused (): IDownload[] {
+    return this._pausedList.toArray()
+  }
+
+  public countPaused (): number {
+    return this._pausedList.size
+  }
+
   public remove (gid: string | IDownload, removeFile?: boolean): void {
     const download = this._getDownload(gid)
     download.abort()

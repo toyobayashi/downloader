@@ -54,6 +54,7 @@ export interface IDownload extends EventEmitter {
 
   abort (): void
   whenStopped (): Promise<void>
+  dispose (): void
 }
 
 /** @public */
