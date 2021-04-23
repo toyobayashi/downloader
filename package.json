@@ -1,7 +1,7 @@
 {
   "name": "@tybys/downloader",
-  "version": "0.0.1",
-  "description": "",
+  "version": "0.1.0",
+  "description": "Tiny downloader in Node.js",
   "typings": "./lib/cjs-modern/index.d.ts",
   "main": "./lib/cjs-modern/index.js",
   "scripts": {

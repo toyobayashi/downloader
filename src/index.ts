@@ -1,5 +1,5 @@
 /**
- * A downloader in Node.js
+ * Tiny downloader in Node.js
  *
  * @packageDocumentation
  */

@@ -29,13 +29,13 @@ electron1204.on('fail', () => {
   console.log(electron1204.error)
 })
 
-electron1204.whenStopped().then(download => {
+electron1204.whenStopped().then(() => {
   console.log('whenStopped ' + electron1204.gid)
 }).catch(err => {
   console.log(err.message)
 })
 
-electron1203.whenStopped().then(download => {
+electron1203.whenStopped().then(() => {
   console.log('whenStopped ' + electron1203.gid)
 }).catch(err => {
   console.log(err.message)
