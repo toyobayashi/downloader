@@ -2,8 +2,7 @@ import { homedir } from 'os'
 import { join, basename, dirname, parse } from 'path'
 import { mkdirSync, existsSync, statSync, createWriteStream, unlinkSync, renameSync, WriteStream } from 'fs'
 import { EventEmitter } from 'events'
-import type { Agent as HttpAgent, ClientRequest } from 'http'
-import type { Agent as HttpsAgent } from 'https'
+import type { ClientRequest } from 'http'
 import type { Progress, Response, RequestError } from 'got'
 import got from 'got'
 import { DownloadStatus, Download, DownloadOverwrite } from './Download'
@@ -11,6 +10,7 @@ import type { IDownload, DownloadEvent } from './Download'
 import { DownloadList } from './util/DownloadList'
 import { DownloadErrorCode, DownloadError } from './DownloadError'
 import { definePrivate, definePublic } from './util/def'
+import { getProxyAgent } from './util/proxy'
 
 /** @public */
 export interface IDownloadOptions {
@@ -18,11 +18,7 @@ export interface IDownloadOptions {
   out: string
   headers: Record<string, string>
   overwrite: DownloadOverwrite
-  agent: {
-    http?: HttpAgent
-    https?: HttpsAgent
-    http2?: unknown
-  } | false
+  agent: string | false
 }
 
 /** @public */
@@ -158,14 +154,7 @@ export class Downloader extends EventEmitter {
     }
     const overwrite = options?.overwrite ?? this.settings.overwrite
     const optionsAgent = options?.agent
-    const agent = optionsAgent === false
-      ? false
-      : (this.settings.agent === false
-          ? optionsAgent!
-          : {
-              ...this.settings.agent,
-              ...optionsAgent
-            })
+    const agent = optionsAgent != null ? getProxyAgent(optionsAgent) : getProxyAgent(this.settings.agent)
     const download = new Download(url, dir, out, headers, overwrite, agent)
 
     if (overwrite === DownloadOverwrite.RENAME) {

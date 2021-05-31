@@ -7,9 +7,5 @@
 <b>Signature:</b>
 
 ```typescript
-agent: {
-        http?: HttpAgent;
-        https?: HttpsAgent;
-        http2?: unknown;
-    } | false;
+agent: string | false;
 ```

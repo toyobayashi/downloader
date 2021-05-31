@@ -15,7 +15,7 @@ export interface IDownloadOptions
 
 |  Property | Type | Description |
 |  --- | --- | --- |
-|  [agent](./downloader.idownloadoptions.agent.md) | { http?: HttpAgent; https?: HttpsAgent; http2?: unknown; } \| false |  |
+|  [agent](./downloader.idownloadoptions.agent.md) | string \| false |  |
 |  [dir](./downloader.idownloadoptions.dir.md) | string |  |
 |  [headers](./downloader.idownloadoptions.headers.md) | Record&lt;string, string&gt; |  |
 |  [out](./downloader.idownloadoptions.out.md) | string |  |

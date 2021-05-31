@@ -2,11 +2,11 @@
 
 import { ObjectId } from '@tybys/oid'
 import { EventEmitter } from 'events'
-import type { Agent as HttpAgent, ClientRequest } from 'http'
-import type { Agent as HttpsAgent } from 'https'
+import type { ClientRequest } from 'http'
 import { join } from 'path'
 import type { DownloadError } from './DownloadError'
 import { definePrivate, definePublic } from './util/def'
+import type { AgentType } from './util/proxy'
 
 /** @public */
 export enum DownloadOverwrite {
@@ -67,12 +67,6 @@ export interface IDownloadProgress {
   url: string
   percent: number
 }
-
-type AgentType = {
-  http?: HttpAgent
-  https?: HttpsAgent
-  http2?: unknown
-} | false
 
 export class Download extends EventEmitter implements IDownload {
   public readonly gid!: string
